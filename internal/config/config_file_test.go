@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -150,20 +151,83 @@ func Test_parseConfigFile(t *testing.T) {
 
 func Test_ConfigDir(t *testing.T) {
 	tests := []struct {
-		envVar string
-		want   string
+		name        string
+		onlyWindows bool
+		env         map[string]string
+		output      string
 	}{
-		{"/tmp/gh", ".tmp.gh"},
-		{"", ".config.gh"},
+		{
+			name:   "no envVars",
+			output: ".config.gh",
+			env: map[string]string{
+				"AppData": "",
+			},
+		},
+		{
+			name: "GH_CONFIG_DIR specified",
+			env: map[string]string{
+				"GH_CONFIG_DIR": "/tmp/gh_config_dir",
+			},
+			output: ".tmp.gh_config_dir",
+		},
+		{
+			name: "XDG_CONFIG_HOME specified",
+			env: map[string]string{
+				"XDG_CONFIG_HOME": "/tmp",
+			},
+			output: ".tmp.gh",
+		},
+		{
+			name: "GH_CONFIG_DIR and XDG_CONFIG_HOME specified",
+			env: map[string]string{
+				"GH_CONFIG_DIR":   "/tmp/gh_config_dir",
+				"XDG_CONFIG_HOME": "/tmp",
+			},
+			output: ".tmp.gh_config_dir",
+		},
+		{
+			name:        "AppData specified",
+			onlyWindows: true,
+			env: map[string]string{
+				"AppData": "/tmp/",
+			},
+			output: ".tmp.GitHub CLI",
+		},
+		{
+			name:        "GH_CONFIG_DIR and AppData specified",
+			onlyWindows: true,
+			env: map[string]string{
+				"GH_CONFIG_DIR": "/tmp/gh_config_dir",
+				"AppData":       "/tmp",
+			},
+			output: ".tmp.gh_config_dir",
+		},
+		{
+			name:        "XDG_CONFIG_HOME and AppData specified",
+			onlyWindows: true,
+			env: map[string]string{
+				"XDG_CONFIG_HOME": "/tmp",
+				"AppData":         "/tmp",
+			},
+			output: ".tmp.gh",
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(fmt.Sprintf("envVar: %q", tt.envVar), func(t *testing.T) {
-			if tt.envVar != "" {
-				os.Setenv(GH_CONFIG_DIR, tt.envVar)
-				defer os.Unsetenv(GH_CONFIG_DIR)
+		if tt.onlyWindows && runtime.GOOS != "windows" {
+			continue
+		}
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.env != nil {
+				for k, v := range tt.env {
+					old := os.Getenv(k)
+					os.Setenv(k, v)
+					defer os.Setenv(k, old)
+				}
 			}
-			assert.Regexp(t, tt.want, ConfigDir())
+
+			defer stubMigrateConfigDir()()
+			assert.Regexp(t, tt.output, ConfigDir())
 		})
 	}
 }
