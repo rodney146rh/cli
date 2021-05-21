@@ -237,9 +237,13 @@ func Test_ConfigDir(t *testing.T) {
 func Test_autoMigrateConfigDir_noMigration(t *testing.T) {
 	migrateDir := t.TempDir()
 
-	old := os.Getenv("HOME")
-	os.Setenv("HOME", "/nonexistent-dir")
-	defer os.Setenv("HOME", old)
+	homeEnvVar := "HOME"
+	if runtime.GOOS == "windows" {
+		homeEnvVar = "USERPROFILE"
+	}
+	old := os.Getenv(homeEnvVar)
+	os.Setenv(homeEnvVar, "/nonexistent-dir")
+	defer os.Setenv(homeEnvVar, old)
 
 	autoMigrateConfigDir(migrateDir)
 
@@ -251,9 +255,13 @@ func Test_autoMigrateConfigDir_noMigration(t *testing.T) {
 func Test_autoMigrateConfigDir_noMigration_samePath(t *testing.T) {
 	migrateDir := t.TempDir()
 
-	old := os.Getenv("HOME")
-	os.Setenv("HOME", migrateDir)
-	defer os.Setenv("HOME", old)
+	homeEnvVar := "HOME"
+	if runtime.GOOS == "windows" {
+		homeEnvVar = "USERPROFILE"
+	}
+	old := os.Getenv(homeEnvVar)
+	os.Setenv(homeEnvVar, migrateDir)
+	defer os.Setenv(homeEnvVar, old)
 
 	autoMigrateConfigDir(migrateDir)
 
@@ -268,14 +276,19 @@ func Test_autoMigrateConfigDir_migration(t *testing.T) {
 	migrateDir := t.TempDir()
 	md := filepath.Join(migrateDir, ".config", "gh")
 
-	old := os.Getenv("HOME")
-	os.Setenv("HOME", defaultDir)
-	defer os.Setenv("HOME", old)
+	homeEnvVar := "HOME"
+	if runtime.GOOS == "windows" {
+		homeEnvVar = "USERPROFILE"
+	}
+	old := os.Getenv(homeEnvVar)
+	os.Setenv(homeEnvVar, defaultDir)
+	defer os.Setenv(homeEnvVar, old)
 
 	err := os.MkdirAll(dd, 0777)
 	assert.NoError(t, err)
-	_, err = ioutil.TempFile(dd, "")
+	f, err := ioutil.TempFile(dd, "")
 	assert.NoError(t, err)
+	f.Close()
 
 	autoMigrateConfigDir(md)
 
