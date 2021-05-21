@@ -3,7 +3,9 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 
@@ -230,4 +232,57 @@ func Test_ConfigDir(t *testing.T) {
 			assert.Regexp(t, tt.output, ConfigDir())
 		})
 	}
+}
+
+func Test_autoMigrateConfigDir_noMigration(t *testing.T) {
+	migrateDir := t.TempDir()
+
+	old := os.Getenv("HOME")
+	os.Setenv("HOME", "/nonexistent-dir")
+	defer os.Setenv("HOME", old)
+
+	autoMigrateConfigDir(migrateDir)
+
+	files, err := ioutil.ReadDir(migrateDir)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(files))
+}
+
+func Test_autoMigrateConfigDir_noMigration_samePath(t *testing.T) {
+	migrateDir := t.TempDir()
+
+	old := os.Getenv("HOME")
+	os.Setenv("HOME", migrateDir)
+	defer os.Setenv("HOME", old)
+
+	autoMigrateConfigDir(migrateDir)
+
+	files, err := ioutil.ReadDir(migrateDir)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(files))
+}
+
+func Test_autoMigrateConfigDir_migration(t *testing.T) {
+	defaultDir := t.TempDir()
+	dd := filepath.Join(defaultDir, ".config", "gh")
+	migrateDir := t.TempDir()
+	md := filepath.Join(migrateDir, ".config", "gh")
+
+	old := os.Getenv("HOME")
+	os.Setenv("HOME", defaultDir)
+	defer os.Setenv("HOME", old)
+
+	err := os.MkdirAll(dd, 0777)
+	assert.NoError(t, err)
+	_, err = ioutil.TempFile(dd, "")
+	assert.NoError(t, err)
+
+	autoMigrateConfigDir(md)
+
+	_, err = ioutil.ReadDir(dd)
+	assert.True(t, os.IsNotExist(err))
+
+	files, err := ioutil.ReadDir(md)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(files))
 }

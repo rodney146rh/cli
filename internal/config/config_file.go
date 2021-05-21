@@ -18,6 +18,7 @@ import (
 const (
 	GH_CONFIG_DIR   = "GH_CONFIG_DIR"
 	XDG_CONFIG_HOME = "XDG_CONFIG_HOME"
+	APP_DATA        = "AppData"
 )
 
 // Config path precedence
@@ -31,7 +32,7 @@ func ConfigDir() string {
 		path = a
 	} else if b := os.Getenv(XDG_CONFIG_HOME); b != "" {
 		path = filepath.Join(b, "gh")
-	} else if c, err := os.UserConfigDir(); runtime.GOOS == "windows" && err == nil && c != "" {
+	} else if c := os.Getenv(APP_DATA); runtime.GOOS == "windows" && c != "" {
 		path = filepath.Join(c, "GitHub CLI")
 	} else {
 		d, _ := os.UserHomeDir()
@@ -50,27 +51,31 @@ func ConfigDir() string {
 // If configs exist then move them to newPath
 // TODO: Remove support for homedir.Dir location in v2
 func autoMigrateConfigDir(newPath string) {
-	var paths []string
-	p1, _ := os.UserHomeDir()
-	paths = append(paths, p1)
-	p2, _ := homedir.Dir()
-	paths = append(paths, p2)
-	for _, path := range paths {
-		if path == "" || path == newPath {
-			continue
-		}
+	path, err := os.UserHomeDir()
+	if oldPath := filepath.Join(path, ".config", "gh"); err == nil && dirExists(oldPath) {
+		migrateConfigDir(oldPath, newPath)
+		return
+	}
 
-		path := filepath.Join(path, ".config", "gh")
-		if s, err := os.Stat(path); err != nil || !s.IsDir() {
-			continue
-		}
-
-		migrateConfigDir(path, newPath)
-		break
+	path, err = homedir.Dir()
+	if oldPath := filepath.Join(path, ".config", "gh"); err == nil && dirExists(oldPath) {
+		migrateConfigDir(oldPath, newPath)
 	}
 }
 
+func dirExists(path string) bool {
+	f, err := os.Stat(path)
+	if err == nil && f.IsDir() {
+		return true
+	}
+	return false
+}
+
 var migrateConfigDir = func(oldPath, newPath string) {
+	if oldPath == newPath {
+		return
+	}
+
 	_ = os.MkdirAll(filepath.Dir(newPath), 0755)
 	_ = os.Rename(oldPath, newPath)
 }
